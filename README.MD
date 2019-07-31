@@ -32,7 +32,7 @@ Setup Kubernetes Master and Nodes with Ansible:
     - Login in to kube-master with: `ssh -i Private.pem centos@<kube_master_private_ip>`
         and execute `kubectl get nodes` to see all nodes in the cluster
 
-Experianced problems after "setup_kubernetes.yml" sometimes EC2 machine receives kernel panic and does not want to boot after the playbook finishes. Know should be gone.
+Experienced problems after "setup_kubernetes.yml" sometimes EC2 machine receives kernel panic and does not want to boot after the playbook finishes. Know should be gone.
 
 P.S: For testing ansible with docker - you have to expose the docker host 
 
