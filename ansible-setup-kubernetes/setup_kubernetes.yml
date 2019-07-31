@@ -1,0 +1,172 @@
+- name: Setup Kubernetes
+  hosts: kube-master, kube-node1, kube-node2
+  tasks:
+
+
+    - name: Setup /etc/hosts
+      lineinfile: dest=/etc/hosts regexp='.*{{ item }}$' line="{{ hostvars[item].internal_ip  }} {{item}}" state=present
+      with_items: "{{ hostvars }}"
+      become: true
+
+    - name: Set hostname
+      command: "hostnamectl set-hostname {{ inventory_hostname }}"
+      become: true
+
+    - name: Update package database
+      yum:
+        name: "*"
+        state: latest
+      become: true
+
+    - name: epel-release
+      yum:
+         name: epel-release 
+         state: present
+      become: true
+    
+    - name: disable SE linux
+      shell: |
+        setenforce 0
+        sed -i --follow-symlinks 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/sysconfig/selinux
+      become: true
+
+    - name: Enable br_netfilter module
+      shell: |
+        modprobe br_netfilter
+        echo '1' > /proc/sys/net/bridge/bridge-nf-call-iptables
+      become: true
+
+    # Not necessary because AWS has swap turned off by default, but just in case
+    - name: Disable swap
+      shell: |
+        swapoff -a 
+      become: true
+    
+    - name: Install Docker Dependencies
+      yum: 
+        pkg: "{{ item }}"
+        state: installed
+      with_items:
+        - yum-utils 
+        - device-mapper-persistent-data
+        - lvm2
+      become: true
+    
+    - name: Add docker repository
+      command: |
+        yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+      become: true
+
+    - name: Install Docker
+      yum: 
+        name: docker-ce-18.06.3.ce
+        state: present
+        allow_downgrade: true
+      become: true
+
+    - name: Start Docker daemon
+      command: 
+        systemctl start docker  
+      become: true
+
+    - name: Check Docker status
+      command:
+        systemctl status docker
+      become: true
+
+    - name: Enable Docker auto startup
+      command:
+        systemctl enable docker
+      become: true  
+
+    - name: Add centos user to the docker group
+      command: 
+        usermod -aG docker centos
+      become: true
+
+    - name: Add Kubernetes repo
+      copy:
+        dest: "/etc/yum.repos.d/kubernetes.repo"
+        content: |
+          [kubernetes]
+          name=Kubernetes
+          baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+          enabled=1
+          gpgcheck=1
+          repo_gpgcheck=1
+          gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg
+                 https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+      become: true
+
+    - name: Install Kubernetes
+      yum: 
+        pkg: "{{ item }}"
+        state: installed
+      with_items:
+        - kubelet
+        - kubeadm
+        - kubectl
+      become: true
+
+    - name: Enable kubelet at system start
+      command: systemctl enable kubelet
+      become: true
+
+    - name: Get cgroup driver
+      shell: |
+        docker info | grep -i cgroup
+      register: cgroup_driver_output
+      become: true
+
+    - name: Output cgroup_driver
+      debug:
+        msg: "{{ cgroup_driver_output.stdout }}"
+
+    # - name: Change kubernetes cgroup-driver  to cgroupfs
+    #   command: sed -i 's/cgroup-driver=systemd/cgroup-driver=cgroupfs/g' /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+    #   when: cgroup_driver_output.stdout is search('(cgroupfs)')
+    #   become: true
+
+    # - name: Restart Kubernetes service
+    #   shell: |
+    #     systemctl daemon-reload
+    #     systemctl restart kubelet
+    #   become: true
+
+    - name: Change kubernetes cgroup-driver  to systemd
+      shell: |
+        cat > /etc/docker/daemon.json <<EOF
+          {
+            "exec-opts": ["native.cgroupdriver=systemd"],
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "100m"
+            },
+            "storage-driver": "overlay2",
+            "storage-opts": [
+              "overlay2.override_kernel_check=true"
+            ]
+          }
+          EOF 
+      when: cgroup_driver_output.stdout is search('(cgroupfs)')
+      become: true
+    
+    - name: Restart Docker service
+      shell: |
+        systemctl daemon-reload
+        systemctl restart docker
+      become: true
+
+    - name: Create a directory if it does not exist
+      file:
+        path: /etc/systemd/system/docker.service.d
+        state: directory
+        mode: '0755'
+      become: true
+
+    - name: Restart
+      reboot:
+      become: true
+
+
+

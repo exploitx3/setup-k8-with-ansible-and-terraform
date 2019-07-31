@@ -1,0 +1,64 @@
+- name: Setup Kubernetes Master
+  hosts: kube-master
+
+  tasks:
+
+    - name: Init Kubernetes master configuration
+      command: |
+        kubeadm init --pod-network-cidr=10.244.0.0/16
+      register: init_output
+      become: true
+    
+    - name: Output response from "kubeadm init"2
+      debug: 
+        msg: "${{ init_output.stdout | regex_search('(kubeadm join [\\w\\W]+$)', '\\1',  multiline=True, ignorecase=True) }}"
+    
+    - name: Setup Kubernetes folders
+      shell: |
+        mkdir -p $HOME/.kube
+        sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+        sudo chown $(id -u):$(id -g) $HOME/.kube/config
+      become: yes
+      become_user: centos
+
+
+    - name: Get join script for kube nodes
+      set_fact:
+        join_script: "{{ init_output.stdout | regex_search('(kubeadm join [\\w\\W]+$)', '\\1',  multiline=True, ignorecase=True) }}"
+    
+      
+    - name: output join script
+      debug:
+        msg: "{{ join_script }}"
+      when: join_script
+
+    # - name: bla
+    #   debug:
+    #     msg: dsfl
+    #   register: join_script
+    
+    - name: Save join script
+      local_action: copy content="{{ join_script[0] }}" dest=./data/join_script
+
+    - name: Setup kubernetes admin configuration for current user
+      shell: |
+        mkdir -p $HOME/.kube
+        sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+        sudo chown $(id -u):$(id -g) $HOME/.kube/config
+      become: true
+
+    - name: Setup Flannel
+      command: |
+        kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml --insecure-skip-tls-verify=true
+
+
+    # - name: Change kubernetes cgroup-driver 
+    #   command: sed -i 's/cgroup-driver=systemd/cgroup-driver=cgroupfs/g' /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+    #   when: cgroup_driver_output.stdout is search('(cgroupfs)')
+    #   become: true
+    
+    # - name: Restart Kubernetes service
+    #   shell: |
+    #     systemctl daemon-reload
+    #     systemctl restart kubelet
+    #   become: true

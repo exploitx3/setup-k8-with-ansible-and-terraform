@@ -1,0 +1,15 @@
+- name: Setup Kube-Nodes
+  hosts: kube-node1, kube-node2
+
+  tasks:
+
+    - name: Join master
+      script: ./data/join_script
+      register: join_output
+      become: true
+    
+
+    - name: Output - Join Master 
+      debug:
+        msg: "{{ join_output }}"
+      
