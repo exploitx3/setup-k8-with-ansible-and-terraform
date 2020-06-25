@@ -89,13 +89,13 @@ resource "aws_security_group" "kube_access" {
   //   description = "Kubelet API, kube-scheduler, kube-controller-manager"
   // }
 
-  // ingress {
-  //   from_port   = 6443
-  //   to_port     = 6443
-  //   protocol    = "tcp"
-  //   cidr_blocks = ["10.0.1.0/24"]
-  //   description = "Kubernetes API server"
-  // }
+  ingress {
+    from_port   = 6443
+    to_port     = 6443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Kubernetes API server"
+  }
 
   // ingress {
   //   from_port   = 2379
